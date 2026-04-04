@@ -21,16 +21,14 @@ Một hệ thống đặt vé xem phim toàn diện (Full-stack), cho phép ngư
 * **CI/CD:** GitHub Actions (Automated Build & Test)
 
 ### Frontend
-* **Framework:** [ReactJS]
-* **Styling:** Tailwind CSS]
+* **Framework:** ReactJS
+* **Styling:** Tailwind CSS
 
-## ⚙️ Hướng dẫn cài đặt (Local Development)
+👨‍💻 Tác giả
+Hoàng Mạnh Quân
 
-### Yêu cầu hệ thống
-* [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-* [SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)
-* [Node.js](https://nodejs.org/) (nếu dùng framework frontend)
+GitHub: @siluq16
 
-### Các bước chạy Backend
-1. Clone repository này về máy:
-   ```bash
+Email: [siluq.quan.1609@gmail.com]
+
+Facebook: [https://www.facebook.com/Siluq.16]
