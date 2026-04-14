@@ -32,6 +32,7 @@ app.UseSwaggerUI();
 app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
