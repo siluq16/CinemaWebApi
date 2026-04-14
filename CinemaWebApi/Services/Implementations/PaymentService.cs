@@ -1,4 +1,5 @@
-﻿using CinemaWebApi.DTOs.Requests;
+﻿using Azure.Core;
+using CinemaWebApi.DTOs.Requests;
 using CinemaWebApi.Models;
 using CinemaWebApi.Repositories.Interfaces;
 using CinemaWebApi.Services.Interfaces;
@@ -28,7 +29,7 @@ namespace CinemaWebApi.Services.Implementations
 
         public async Task<bool> ProcessPaymentAsync(ProcessPaymentRequest request, Guid userId)
         {
-            await Task.Delay(2000);
+            //await Task.Delay(2000);
 
             using var transaction = await _paymentRepo.BeginTransactionAsync();
             try
@@ -40,7 +41,6 @@ namespace CinemaWebApi.Services.Implementations
                 if (booking.Status != "pending") throw new Exception("Đơn hàng không ở trạng thái chờ thanh toán.");
                 if (request.Amount < booking.FinalAmount) throw new Exception("Số tiền thanh toán không đủ.");
 
-                // 1. Tạo bản ghi Thanh toán
                 var payment = new Payment
                 {
                     BookingId = booking.Id,
@@ -53,7 +53,6 @@ namespace CinemaWebApi.Services.Implementations
                 };
                 await _paymentRepo.AddAsync(payment);
 
-                // 2. Chốt Đơn & Ghế & Đồ ăn
                 booking.Status = "confirmed";
                 booking.UpdatedAt = DateTime.Now;
                 foreach (var seat in booking.BookingSeats) seat.Status = "confirmed";
@@ -66,51 +65,88 @@ namespace CinemaWebApi.Services.Implementations
                 _bookingRepo.Update(booking);
                 await _paymentRepo.SaveChangesAsync();
                 await transaction.CommitAsync();
-
                 if (booking.User?.Email != null)
                 {
+                    // Capture dữ liệu cần thiết trước khi fire-and-forget
+                    var userEmail = booking.User.Email;
+                    var userName = booking.User.FullName;
+                    var movieTitle = booking.Showtime?.Movie?.Title;
+                    var bookingCode = booking.BookingCode;
+                    var finalAmount = booking.FinalAmount;
+                    var userId2 = booking.UserId;
+                    var bookingId = booking.Id;
                     var seatNames = string.Join(", ", booking.BookingSeats.Select(s => $"{s.Seat?.RowLabel}{s.Seat?.SeatNumber}"));
+                    var cinemaName = $"{booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}";
+                    var startTime = booking.Showtime?.StartTime;
 
-                    string qrCodeUrl = $"https://quickchart.io/qr?text={booking.BookingCode}&size=250";
+                    // Fire-and-forget: không await, lỗi không ảnh hưởng response
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            string qrCodeUrl = $"https://quickchart.io/qr?text={bookingCode}&size=250";
+                            string htmlBody = BuildEmailBody(userName, finalAmount, request.Method,
+                                movieTitle, qrCodeUrl, bookingCode, cinemaName, startTime, seatNames);
 
-                    // Tạo một template HTML xịn xò (Đã chèn thêm thẻ img chứa mã QR)
-                    string htmlBody = $@"
-                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
-                            <h2 style='color: #E50914; text-align: center;'>VÉ XEM PHIM ĐIỆN TỬ</h2>
-                            <p>Xin chào <strong>{booking.User.FullName}</strong>,</p>
-                            <p>Cảm ơn bạn đã đặt vé. Giao dịch thanh toán <strong>{booking.FinalAmount:N0}đ</strong> qua {request.Method} đã thành công!</p>
-        
-                            <div style='background: #f9f9f9; padding: 20px; border-top: 4px solid #E50914; margin: 20px 0; text-align: center;'>
-                                <h3 style='margin-top: 0; font-size: 22px;'>{booking.Showtime?.Movie?.Title}</h3>
-            
-                                <div style='margin: 20px 0;'>
-                                    <img src='{qrCodeUrl}' alt='QR Code Vé' style='border: 2px solid #ccc; padding: 10px; border-radius: 10px; width: 200px; height: 200px;' />
-                                </div>
-
-                                <p style='margin: 5px 0;'><strong>Mã Đặt Vé:</strong> <span style='font-size: 24px; color: #E50914; font-weight: bold; letter-spacing: 2px;'>{booking.BookingCode}</span></p>
-            
-                                <hr style='border: 0; border-top: 1px dashed #ccc; margin: 15px 0;' />
-            
-                                <div style='text-align: left; font-size: 15px;'>
-                                    <p style='margin: 5px 0;'><strong>Rạp:</strong> {booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}</p>
-                                    <p style='margin: 5px 0;'><strong>Suất chiếu:</strong> {booking.Showtime?.StartTime:dd/MM/yyyy HH:mm}</p>
-                                    <p style='margin: 5px 0;'><strong>Ghế:</strong> {seatNames}</p>
-                                </div>
-                            </div>
-        
-                            <p style='color: #555; font-size: 13px; text-align: center;'>Vui lòng đưa Mã QR hoặc Mã Đặt Vé này cho nhân viên tại quầy để in vé giấy hoặc quét trực tiếp qua cổng kiểm soát.</p>
-                        </div>";
-
-                    // Gửi email
-                    await _emailService.SendEmailAsync(booking.User.Email, $"🎟️ Vé Phim Mới: {booking.Showtime?.Movie?.Title}", htmlBody);
-                    await _membershipService.EarnPointsAsync(booking.UserId, booking.Id, booking.FinalAmount);
-                    await _notiService.SendNotificationAsync(
-                        booking.UserId,
-                        "🎟️ Đặt vé thành công!",
-                        $"Bạn đã thanh toán thành công vé xem phim {booking.Showtime?.Movie?.Title}. Mã vé: {booking.BookingCode}",
-                        "payment_success"
-                    );
+                            await Task.WhenAll(
+                                _emailService.SendEmailAsync(userEmail, $"🎟️ Vé Phim Mới: {movieTitle}", htmlBody),
+                                _membershipService.EarnPointsAsync(userId2, bookingId, finalAmount),
+                                _notiService.SendNotificationAsync(userId2,
+                                    "🎟️ Đặt vé thành công!",
+                                    $"Bạn đã thanh toán thành công vé xem phim {movieTitle}. Mã vé: {bookingCode}",
+                                    "payment_success")
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log lỗi nhưng không throw — không ảnh hưởng response
+                            Console.Error.WriteLine($"[PostPayment Error] BookingId={bookingId}: {ex.Message}");
+                        }
+                    });
                 }
+
+                //if (booking.User?.Email != null)
+                //{
+                //    var seatNames = string.Join(", ", booking.BookingSeats.Select(s => $"{s.Seat?.RowLabel}{s.Seat?.SeatNumber}"));
+
+                //    string qrCodeUrl = $"https://quickchart.io/qr?text={booking.BookingCode}&size=250";
+
+                //    string htmlBody = $@"
+                //        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
+                //            <h2 style='color: #E50914; text-align: center;'>VÉ XEM PHIM ĐIỆN TỬ</h2>
+                //            <p>Xin chào <strong>{booking.User.FullName}</strong>,</p>
+                //            <p>Cảm ơn bạn đã đặt vé. Giao dịch thanh toán <strong>{booking.FinalAmount:N0}đ</strong> qua {request.Method} đã thành công!</p>
+        
+                //            <div style='background: #f9f9f9; padding: 20px; border-top: 4px solid #E50914; margin: 20px 0; text-align: center;'>
+                //                <h3 style='margin-top: 0; font-size: 22px;'>{booking.Showtime?.Movie?.Title}</h3>
+            
+                //                <div style='margin: 20px 0;'>
+                //                    <img src='{qrCodeUrl}' alt='QR Code Vé' style='border: 2px solid #ccc; padding: 10px; border-radius: 10px; width: 200px; height: 200px;' />
+                //                </div>
+
+                //                <p style='margin: 5px 0;'><strong>Mã Đặt Vé:</strong> <span style='font-size: 24px; color: #E50914; font-weight: bold; letter-spacing: 2px;'>{booking.BookingCode}</span></p>
+            
+                //                <hr style='border: 0; border-top: 1px dashed #ccc; margin: 15px 0;' />
+            
+                //                <div style='text-align: left; font-size: 15px;'>
+                //                    <p style='margin: 5px 0;'><strong>Rạp:</strong> {booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}</p>
+                //                    <p style='margin: 5px 0;'><strong>Suất chiếu:</strong> {booking.Showtime?.StartTime:dd/MM/yyyy HH:mm}</p>
+                //                    <p style='margin: 5px 0;'><strong>Ghế:</strong> {seatNames}</p>
+                //                </div>
+                //            </div>
+        
+                //            <p style='color: #555; font-size: 13px; text-align: center;'>Vui lòng đưa Mã QR hoặc Mã Đặt Vé này cho nhân viên tại quầy để in vé giấy hoặc quét trực tiếp qua cổng kiểm soát.</p>
+                //        </div>";
+
+                //    await _emailService.SendEmailAsync(booking.User.Email, $"🎟️ Vé Phim Mới: {booking.Showtime?.Movie?.Title}", htmlBody);
+                //    await _membershipService.EarnPointsAsync(booking.UserId, booking.Id, booking.FinalAmount);
+                //    await _notiService.SendNotificationAsync(
+                //        booking.UserId,
+                //        "🎟️ Đặt vé thành công!",
+                //        $"Bạn đã thanh toán thành công vé xem phim {booking.Showtime?.Movie?.Title}. Mã vé: {booking.BookingCode}",
+                //        "payment_success"
+                //    );
+                //}
 
                 return true;
             }
@@ -128,7 +164,7 @@ namespace CinemaWebApi.Services.Implementations
 
             var vnpayConfig = _configuration.GetSection("VnPay");
             var vnpay = new Helpers.VnPayLibrary();
-            var frontendUrl = "http://localhost:5173"; 
+            var frontendUrl = "https://movie-booking-frontend-omega.vercel.app"; 
             var returnUrl = $"{frontendUrl}/booking/{bookingId}/payment";
 
             vnpay.AddRequestData("vnp_Version", vnpayConfig["Version"]!);
@@ -220,6 +256,38 @@ namespace CinemaWebApi.Services.Implementations
 
             // Trả về true nếu chữ ký đúng và thanh toán thành công
             return checkSignature && vnp_ResponseCode == "00";
+        }
+
+        private string BuildEmailBody(string userName, decimal finalAmount, string method,
+            string? movieTitle, string qrCodeUrl, string bookingCode,
+            string cinemaName, DateTime? startTime, string seatNames)
+        {
+            return $@"
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
+                            <h2 style='color: #E50914; text-align: center;'>VÉ XEM PHIM ĐIỆN TỬ</h2>
+                            <p>Xin chào <strong>{userName}</strong>,</p>
+                            <p>Cảm ơn bạn đã đặt vé. Giao dịch thanh toán <strong>{finalAmount:N0}đ</strong> qua {method} đã thành công!</p>
+        
+                            <div style='background: #f9f9f9; padding: 20px; border-top: 4px solid #E50914; margin: 20px 0; text-align: center;'>
+                                <h3 style='margin-top: 0; font-size: 22px;'>{movieTitle}</h3>
+            
+                                <div style='margin: 20px 0;'>
+                                    <img src='{qrCodeUrl}' alt='QR Code Vé' style='border: 2px solid #ccc; padding: 10px; border-radius: 10px; width: 200px; height: 200px;' />
+                                </div>
+
+                                <p style='margin: 5px 0;'><strong>Mã Đặt Vé:</strong> <span style='font-size: 24px; color: #E50914; font-weight: bold; letter-spacing: 2px;'>{bookingCode}</span></p>
+            
+                                <hr style='border: 0; border-top: 1px dashed #ccc; margin: 15px 0;' />
+            
+                                <div style='text-align: left; font-size: 15px;'>
+                                    <p style='margin: 5px 0;'><strong>Rạp:</strong> {cinemaName}</p>
+                                    <p style='margin: 5px 0;'><strong>Suất chiếu:</strong> {startTime:dd/MM/yyyy HH:mm}</p>
+                                    <p style='margin: 5px 0;'><strong>Ghế:</strong> {seatNames}</p>
+                                </div>
+                            </div>
+        
+                            <p style='color: #555; font-size: 13px; text-align: center;'>Vui lòng đưa Mã QR hoặc Mã Đặt Vé này cho nhân viên tại quầy để in vé giấy hoặc quét trực tiếp qua cổng kiểm soát.</p>
+                        </div>";
         }
     }
 }
