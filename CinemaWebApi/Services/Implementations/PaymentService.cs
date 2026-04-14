@@ -14,10 +14,12 @@ namespace CinemaWebApi.Services.Implementations
         private readonly IEmailService _emailService;
         private readonly IMembershipService _membershipService;
         private readonly INotificationService _notiService;
-        private readonly IConfiguration _configuration; 
+        private readonly IConfiguration _configuration;
+        private readonly IServiceScopeFactory _scopeFactory;
+
 
         public PaymentService(
-            IPaymentRepository paymentRepo, IBookingRepository bookingRepo, IEmailService emailService, IConfiguration configuration, IMembershipService membershipService, INotificationService notificationService)
+            IPaymentRepository paymentRepo, IBookingRepository bookingRepo, IEmailService emailService, IConfiguration configuration, IMembershipService membershipService, INotificationService notificationService, IServiceScopeFactory scopeFactory)
         {
             _paymentRepo = paymentRepo;
             _bookingRepo = bookingRepo;
@@ -25,6 +27,7 @@ namespace CinemaWebApi.Services.Implementations
             _configuration = configuration;
             _membershipService = membershipService;
             _notiService = notificationService;
+            _scopeFactory = scopeFactory;
         }
 
         public async Task<bool> ProcessPaymentAsync(ProcessPaymentRequest request, Guid userId)
@@ -68,43 +71,73 @@ namespace CinemaWebApi.Services.Implementations
                 if (booking.User?.Email != null)
                 {
                     // Capture dữ liệu cần thiết trước khi fire-and-forget
-                    var userEmail = booking.User.Email;
-                    var userName = booking.User.FullName;
-                    var movieTitle = booking.Showtime?.Movie?.Title;
-                    var bookingCode = booking.BookingCode;
-                    var finalAmount = booking.FinalAmount;
-                    var userId2 = booking.UserId;
-                    var bookingId = booking.Id;
-                    var seatNames = string.Join(", ", booking.BookingSeats.Select(s => $"{s.Seat?.RowLabel}{s.Seat?.SeatNumber}"));
-                    var cinemaName = $"{booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}";
-                    var startTime = booking.Showtime?.StartTime;
-
-                    // Fire-and-forget: không await, lỗi không ảnh hưởng response
+                    var capturedData = new
+                    {
+                        UserEmail = booking.User.Email,
+                        UserName = booking.User.FullName,
+                        MovieTitle = booking.Showtime?.Movie?.Title ?? "",
+                        BookingCode = booking.BookingCode,
+                        FinalAmount = booking.FinalAmount,
+                        UserId = booking.UserId,
+                        BookingId = booking.Id,
+                        Method = request.Method,
+                        SeatNames = string.Join(", ", booking.BookingSeats
+                           .Select(s => $"{s.Seat?.RowLabel}{s.Seat?.SeatNumber}")),
+                        CinemaName = $"{booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}",
+                        StartTime = booking.Showtime?.StartTime
+                    };
                     _ = Task.Run(async () =>
                     {
+                        await using var scope = _scopeFactory.CreateAsyncScope();
+                        var emailSvc = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                        var memberSvc = scope.ServiceProvider.GetRequiredService<IMembershipService>();
+                        var notiSvc = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
                         try
                         {
-                            string qrCodeUrl = $"https://quickchart.io/qr?text={bookingCode}&size=250";
-                            string htmlBody = BuildEmailBody(userName, finalAmount, request.Method,
-                                movieTitle, qrCodeUrl, bookingCode, cinemaName, startTime, seatNames);
+                            string qrCodeUrl = $"https://quickchart.io/qr?text={capturedData.BookingCode}&size=250";
+                            string htmlBody = $@"
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
+                    <h2 style='color: #E50914; text-align: center;'>VÉ XEM PHIM ĐIỆN TỬ</h2>
+                    <p>Xin chào <strong>{capturedData.UserName}</strong>,</p>
+                    <p>Giao dịch thanh toán <strong>{capturedData.FinalAmount:N0}đ</strong> qua {capturedData.Method} đã thành công!</p>
+                    <div style='background: #f9f9f9; padding: 20px; border-top: 4px solid #E50914; margin: 20px 0; text-align: center;'>
+                        <h3>{capturedData.MovieTitle}</h3>
+                        <img src='{qrCodeUrl}' alt='QR Code' style='width:200px;height:200px;border:2px solid #ccc;padding:10px;border-radius:10px;' />
+                        <p><strong>Mã Đặt Vé:</strong> <span style='font-size:24px;color:#E50914;font-weight:bold;letter-spacing:2px;'>{capturedData.BookingCode}</span></p>
+                        <hr style='border:0;border-top:1px dashed #ccc;margin:15px 0;' />
+                        <div style='text-align:left;font-size:15px;'>
+                            <p><strong>Rạp:</strong> {capturedData.CinemaName}</p>
+                            <p><strong>Suất chiếu:</strong> {capturedData.StartTime:dd/MM/yyyy HH:mm}</p>
+                            <p><strong>Ghế:</strong> {capturedData.SeatNames}</p>
+                        </div>
+                    </div>
+                    <p style='color:#555;font-size:13px;text-align:center;'>Vui lòng đưa mã QR hoặc mã vé cho nhân viên tại quầy.</p>
+                </div>";
 
+                            // ✅ Chạy song song 3 tác vụ
                             await Task.WhenAll(
-                                _emailService.SendEmailAsync(userEmail, $"🎟️ Vé Phim Mới: {movieTitle}", htmlBody),
-                                _membershipService.EarnPointsAsync(userId2, bookingId, finalAmount),
-                                _notiService.SendNotificationAsync(userId2,
+                                emailSvc.SendEmailAsync(
+                                    capturedData.UserEmail,
+                                    $"🎟️ Vé Phim Mới: {capturedData.MovieTitle}",
+                                    htmlBody),
+                                memberSvc.EarnPointsAsync(
+                                    capturedData.UserId,
+                                    capturedData.BookingId,
+                                    capturedData.FinalAmount),
+                                notiSvc.SendNotificationAsync(
+                                    capturedData.UserId,
                                     "🎟️ Đặt vé thành công!",
-                                    $"Bạn đã thanh toán thành công vé xem phim {movieTitle}. Mã vé: {bookingCode}",
+                                    $"Bạn đã thanh toán thành công vé xem phim {capturedData.MovieTitle}. Mã vé: {capturedData.BookingCode}",
                                     "payment_success")
                             );
                         }
                         catch (Exception ex)
                         {
-                            // Log lỗi nhưng không throw — không ảnh hưởng response
-                            Console.Error.WriteLine($"[PostPayment Error] BookingId={bookingId}: {ex.Message}");
+                            Console.Error.WriteLine($"[PostPayment Error] BookingId={capturedData.BookingId}: {ex.Message}");
                         }
                     });
                 }
-
                 //if (booking.User?.Email != null)
                 //{
                 //    var seatNames = string.Join(", ", booking.BookingSeats.Select(s => $"{s.Seat?.RowLabel}{s.Seat?.SeatNumber}"));
@@ -116,25 +149,25 @@ namespace CinemaWebApi.Services.Implementations
                 //            <h2 style='color: #E50914; text-align: center;'>VÉ XEM PHIM ĐIỆN TỬ</h2>
                 //            <p>Xin chào <strong>{booking.User.FullName}</strong>,</p>
                 //            <p>Cảm ơn bạn đã đặt vé. Giao dịch thanh toán <strong>{booking.FinalAmount:N0}đ</strong> qua {request.Method} đã thành công!</p>
-        
+
                 //            <div style='background: #f9f9f9; padding: 20px; border-top: 4px solid #E50914; margin: 20px 0; text-align: center;'>
                 //                <h3 style='margin-top: 0; font-size: 22px;'>{booking.Showtime?.Movie?.Title}</h3>
-            
+
                 //                <div style='margin: 20px 0;'>
                 //                    <img src='{qrCodeUrl}' alt='QR Code Vé' style='border: 2px solid #ccc; padding: 10px; border-radius: 10px; width: 200px; height: 200px;' />
                 //                </div>
 
                 //                <p style='margin: 5px 0;'><strong>Mã Đặt Vé:</strong> <span style='font-size: 24px; color: #E50914; font-weight: bold; letter-spacing: 2px;'>{booking.BookingCode}</span></p>
-            
+
                 //                <hr style='border: 0; border-top: 1px dashed #ccc; margin: 15px 0;' />
-            
+
                 //                <div style='text-align: left; font-size: 15px;'>
                 //                    <p style='margin: 5px 0;'><strong>Rạp:</strong> {booking.Showtime?.Room?.Cinema?.Name} - {booking.Showtime?.Room?.Name}</p>
                 //                    <p style='margin: 5px 0;'><strong>Suất chiếu:</strong> {booking.Showtime?.StartTime:dd/MM/yyyy HH:mm}</p>
                 //                    <p style='margin: 5px 0;'><strong>Ghế:</strong> {seatNames}</p>
                 //                </div>
                 //            </div>
-        
+
                 //            <p style='color: #555; font-size: 13px; text-align: center;'>Vui lòng đưa Mã QR hoặc Mã Đặt Vé này cho nhân viên tại quầy để in vé giấy hoặc quét trực tiếp qua cổng kiểm soát.</p>
                 //        </div>";
 
