@@ -21,7 +21,7 @@
     {
         public Guid Id { get; set; }
         public string BookingCode { get; set; } = null!; // Mã vé dạng ngắn: "V-ABC1234"
-
+        public string UserName { get; set; } = null!;
         public string MovieTitle { get; set; } = null!;
         public string CinemaName { get; set; } = null!;
         public string RoomName { get; set; } = null!;

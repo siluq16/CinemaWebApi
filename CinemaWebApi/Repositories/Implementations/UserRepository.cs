@@ -25,6 +25,29 @@ namespace CinemaWebApi.Repositories.Implementations
             return user;
         }
 
+        public async Task<IEnumerable<User>> GetAllAsync()
+        {
+            return await _context.Users.ToListAsync();
+        }
+
+        public async Task<IEnumerable<Booking>> GetBookingsByUserIdAsync(Guid userId)
+        {
+            return await _context.Bookings
+                .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+                .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+                .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+                .Include(b => b.FoodOrders)
+                    .ThenInclude(fo => fo.FoodOrderItems)
+                        .ThenInclude(foi => foi.FoodItem)
+                .Where(b => b.UserId == userId)
+                .ToListAsync();
+        }
+
+        public async Task UpdateAsync(User user)
+        {
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+        }
         public async Task AddPasswordResetTokenAsync(PasswordResetToken token)
         {
             await _context.PasswordResetTokens.AddAsync(token);

@@ -62,19 +62,19 @@ namespace CinemaWebApi.Controllers
             }
         }
 
-        [HttpGet("vnpay-ipn")]
-        [AllowAnonymous]
-        public async Task<IActionResult> VnPayIpn()
+        [HttpGet("vnpay-return")]
+        [AllowAnonymous] 
+        public IActionResult VnPayReturn()
         {
             try
             {
-                var resultJson = await _paymentService.ProcessVnPayIpnAsync(Request.Query);
+                bool isSuccess = _paymentService.VerifyVnPayReturn(Request.Query);
 
-                return Content(resultJson, "application/json");
+                return Ok(new { isSuccess = isSuccess });
             }
             catch (Exception ex)
             {
-                return Content("{\"RspCode\":\"99\",\"Message\":\"Unknown error\"}", "application/json");
+                return BadRequest(new { isSuccess = false, message = ex.Message });
             }
         }
     }

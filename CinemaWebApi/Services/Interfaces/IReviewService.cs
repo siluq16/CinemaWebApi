@@ -7,5 +7,7 @@ namespace CinemaWebApi.Services.Interfaces
     {
         Task<IEnumerable<ReviewResponse>> GetMovieReviewsAsync(Guid movieId);
         Task<ReviewResponse> CreateReviewAsync(Guid userId, CreateReviewRequest request);
+        Task<ReviewResponse> UpdateReviewAsync(Guid userId, Guid reviewId, UpdateReviewRequest request);
+        Task DeleteReviewAsync(Guid userId, Guid reviewId);
     }
 }

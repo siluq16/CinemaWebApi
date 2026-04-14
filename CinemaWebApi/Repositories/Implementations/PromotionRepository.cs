@@ -81,7 +81,6 @@ namespace CinemaWebApi.Repositories.Implementations
                 }
                 _context.BookingPromotions.Remove(bookingPromo); 
 
-                // Xóa lịch sử dùng mã của user
                 var usage = await _context.UserPromotionUsages.FirstOrDefaultAsync(u => u.BookingId == bookingId);
                 if (usage != null)
                 {

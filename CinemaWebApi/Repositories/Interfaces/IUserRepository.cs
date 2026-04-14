@@ -8,6 +8,9 @@ namespace CinemaWebApi.Repositories.Interfaces
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByPhoneAsync(string phone);
         Task<User> AddAsync(User user);
+        Task<IEnumerable<User>> GetAllAsync();
+        Task<IEnumerable<Booking>> GetBookingsByUserIdAsync(Guid userId);
+        Task UpdateAsync(User user);
         Task AddPasswordResetTokenAsync(PasswordResetToken token);
         Task<PasswordResetToken?> GetValidResetTokenAsync(string tokenHash);
         void UpdatePasswordResetToken(PasswordResetToken token);

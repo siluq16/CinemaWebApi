@@ -14,6 +14,14 @@ namespace CinemaWebApi.Repositories.Implementations
             _context = context;
         }
 
+        public async Task<IEnumerable<Showtime>> GetAllAsync()
+        {
+            return await _context.Showtimes
+                .Include(s => s.Movie)
+                .Include(s => s.Room).ThenInclude(r => r.Cinema)
+                .OrderByDescending(s => s.StartTime)
+                .ToListAsync();
+        }
         public async Task<IEnumerable<UpcomingShowtime>> GetUpcomingShowtimesAsync()
         {
             return await _context.UpcomingShowtimes
@@ -50,7 +58,6 @@ namespace CinemaWebApi.Repositories.Implementations
                 query = query.Where(s => s.MovieId == movieId.Value);
             }
 
-            // Lọc theo rạp
             if (cinemaId.HasValue)
             {
                 query = query.Where(s => s.CinemaId == cinemaId.Value);

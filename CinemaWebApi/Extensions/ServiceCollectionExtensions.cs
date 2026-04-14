@@ -72,6 +72,8 @@ namespace CinemaWebApi.Extensions
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<INotificationService, NotificationService>();
 
+            services.AddScoped<ICinemaRevenueRepository, CinemaRevenueRepository>();
+            services.AddScoped<ICinemaRevenueService, CinemaRevenueService>();
             return services; 
         }
         public static IServiceCollection AddSwaggerConfiguration(this IServiceCollection services)

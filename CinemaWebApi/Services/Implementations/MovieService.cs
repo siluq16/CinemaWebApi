@@ -50,13 +50,15 @@ namespace CinemaWebApi.Services.Implementations
                 {
                     Name = mc.CastMember != null ? mc.CastMember.Name : (mc.Director != null ? mc.Director.Name : "Unknown"),
                     CharacterName = mc.CharacterName,
-                    RoleLabel = mc.RoleLabel
+                    RoleLabel = mc.RoleLabel,
+                    PhotoUrl = mc.CastMember != null ? mc.CastMember.PhotoUrl : (mc.Director != null ? mc.Director.PhotoUrl : null)
                 }).ToList()
             };
         }
 
         public async Task<IEnumerable<MovieResponse>> GetAllMoviesAsync()
         {
+            await AutoUpdateMovieStatusesAsync();
             var movies = await _movieRepository.GetAllAsync();
             return movies.Select(MapToResponse);
         }
@@ -195,6 +197,30 @@ namespace CinemaWebApi.Services.Implementations
             return MapToResponse(movie);
         }
 
+        public async Task<MovieResponse?> UpdateMovieRatingAsync(Guid movieId)
+        {
+            var movie = await _movieRepository.GetByIdAsync(movieId);
+            if (movie == null) return null;
+
+            var reviews = await _context.Reviews
+                .Where(r => r.MovieId == movieId && r.IsVisible)
+                .ToListAsync();
+
+            if (reviews.Any())
+            {
+                movie.ReviewCount = reviews.Count;
+
+                movie.AvgRating = Math.Round((decimal)reviews.Average(r => r.Rating), 1);
+            }
+            else
+            {
+                movie.ReviewCount = 0;
+                movie.AvgRating = 0;
+            }
+
+            await _context.SaveChangesAsync();
+            return MapToResponse(movie);
+        }
         public async Task<bool> DeleteMovieAsync(Guid id)
         {
             var movie = await _movieRepository.GetByIdAsync(id);
@@ -205,6 +231,34 @@ namespace CinemaWebApi.Services.Implementations
             await _movieRepository.SaveChangesAsync();
 
             return true;
+        }
+        public async Task AutoUpdateMovieStatusesAsync()
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+
+            var moviesToStart = await _context.Movies
+                .Where(m => m.Status == "coming_soon" && m.ReleaseDate.HasValue && m.ReleaseDate.Value <= today)
+                .ToListAsync();
+
+            foreach (var movie in moviesToStart)
+            {
+                movie.Status = "now_showing";
+            }
+
+            var moviesToEnd = await _context.Movies
+                .Where(m => m.Status == "now_showing" && m.EndDate.HasValue && m.EndDate.Value < today)
+                .ToListAsync();
+
+            foreach (var movie in moviesToEnd)
+            {
+                movie.Status = "ended";
+                movie.IsFeatured = false;
+            }
+
+            if (moviesToStart.Any() || moviesToEnd.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

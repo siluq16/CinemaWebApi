@@ -34,6 +34,16 @@ namespace CinemaWebApi.Repositories.Implementations
             return review;
         }
 
+        public async Task<Review?> GetReviewByIdAsync(Guid id)
+        {
+            return await _context.Reviews.FirstOrDefaultAsync(r => r.Id == id);
+        }
+
+        public void DeleteReview(Review review)
+        {
+            _context.Reviews.Remove(review);
+        }
+
         public async Task<bool> SaveChangesAsync()
         {
             return await _context.SaveChangesAsync() > 0;

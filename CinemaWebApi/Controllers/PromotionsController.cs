@@ -7,7 +7,6 @@ namespace CinemaWebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "admin")] 
     public class PromotionsController : ControllerBase
     {
         private readonly IPromotionService _promotionService;
@@ -33,6 +32,8 @@ namespace CinemaWebApi.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "admin")]
+
         public async Task<IActionResult> CreatePromotion([FromBody] CreatePromotionRequest request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -49,6 +50,8 @@ namespace CinemaWebApi.Controllers
         }
 
         [HttpPut("{id:guid}")]
+        [Authorize(Roles = "admin")]
+
         public async Task<IActionResult> UpdatePromotion(Guid id, [FromBody] CreatePromotionRequest request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -67,6 +70,8 @@ namespace CinemaWebApi.Controllers
         }
 
         [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "admin")]
+
         public async Task<IActionResult> DeletePromotion(Guid id)
         {
             // API này gọi là Delete nhưng thực chất là thao tác "Vô hiệu hóa" (Khóa mã)

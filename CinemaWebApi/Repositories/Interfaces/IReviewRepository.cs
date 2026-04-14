@@ -9,6 +9,8 @@ namespace CinemaWebApi.Repositories.Implementations
         Task<IEnumerable<Review>> GetReviewsByMovieAsync(Guid movieId);
         Task<Review?> GetUserReviewForMovieAsync(Guid userId, Guid movieId);
         Task<Review> AddReviewAsync(Review review);
+        Task<Review?> GetReviewByIdAsync(Guid id);
+        void DeleteReview(Review review);
         Task<bool> SaveChangesAsync();
     }
 

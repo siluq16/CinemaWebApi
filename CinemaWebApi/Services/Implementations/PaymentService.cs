@@ -128,6 +128,8 @@ namespace CinemaWebApi.Services.Implementations
 
             var vnpayConfig = _configuration.GetSection("VnPay");
             var vnpay = new Helpers.VnPayLibrary();
+            var frontendUrl = "http://localhost:5173"; 
+            var returnUrl = $"{frontendUrl}/booking/{bookingId}/payment";
 
             vnpay.AddRequestData("vnp_Version", vnpayConfig["Version"]!);
             vnpay.AddRequestData("vnp_Command", vnpayConfig["Command"]!);
@@ -143,7 +145,7 @@ namespace CinemaWebApi.Services.Implementations
             // Truyền BookingId làm mã tham chiếu
             vnpay.AddRequestData("vnp_OrderInfo", "Thanh toan ve xem phim ma " + booking.BookingCode);
             vnpay.AddRequestData("vnp_OrderType", "other");
-            vnpay.AddRequestData("vnp_ReturnUrl", "http://localhost:3000/payment-success"); // Đổi thành URL Frontend của bạn
+            vnpay.AddRequestData("vnp_ReturnUrl", returnUrl);
             vnpay.AddRequestData("vnp_TxnRef", booking.Id.ToString());
 
             return vnpay.CreateRequestUrl(vnpayConfig["BaseUrl"]!, vnpayConfig["HashSecret"]!);
@@ -197,6 +199,27 @@ namespace CinemaWebApi.Services.Implementations
             {
                 return "{\"RspCode\":\"00\",\"Message\":\"Transaction failed\"}";
             }
+        }
+        public bool VerifyVnPayReturn(IQueryCollection queryData)
+        {
+            var vnpayConfig = _configuration.GetSection("VnPay");
+            var vnpay = new Helpers.VnPayLibrary();
+
+            foreach (var (key, value) in queryData)
+            {
+                if (!string.IsNullOrEmpty(key) && key.StartsWith("vnp_"))
+                {
+                    vnpay.AddResponseData(key, value.ToString());
+                }
+            }
+
+            string vnp_SecureHash = queryData["vnp_SecureHash"].ToString();
+            string vnp_ResponseCode = vnpay.GetResponseData("vnp_ResponseCode");
+
+            bool checkSignature = vnpay.ValidateSignature(vnp_SecureHash, vnpayConfig["HashSecret"]!);
+
+            // Trả về true nếu chữ ký đúng và thanh toán thành công
+            return checkSignature && vnp_ResponseCode == "00";
         }
     }
 }

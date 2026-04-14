@@ -10,5 +10,6 @@
         public string? Comment { get; set; }
         public bool IsVerified { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 }

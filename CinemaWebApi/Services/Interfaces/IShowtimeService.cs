@@ -5,6 +5,7 @@ namespace CinemaWebApi.Services.Interfaces
 {
     public interface IShowtimeService
     {
+        Task<IEnumerable<ShowtimeResponse>> GetAllShowtimesAsync();
         Task<IEnumerable<ShowtimeResponse>> GetUpcomingShowtimesAsync();
         Task<ShowtimeResponse?> GetShowtimeByIdAsync(Guid id);
         Task<ShowtimeResponse> CreateShowtimeAsync(CreateShowtimeRequest request);

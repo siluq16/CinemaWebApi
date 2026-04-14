@@ -31,6 +31,7 @@ namespace CinemaWebApi.Services.Implementations
                 MaxUsesPerUser = p.MaxUsesPerUser,
                 ValidFrom = p.ValidFrom,
                 ValidTo = p.ValidTo,
+                UsedCount = p.UsedCount,
                 IsActive = p.IsActive
             };
         }

@@ -29,5 +29,6 @@
         public string Name { get; set; } = null!; 
         public string? CharacterName { get; set; }
         public string? RoleLabel { get; set; } 
+        public string? PhotoUrl { get; set; }
     }
 }

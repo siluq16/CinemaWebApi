@@ -15,6 +15,11 @@ namespace CinemaWebApi.Controllers
         {
             _showtimeService = showtimeService;
         }
+        [HttpGet()]
+        public async Task<IActionResult> GetAll()
+        {
+            return Ok(await _showtimeService.GetAllShowtimesAsync());
+        }
 
         [HttpGet("upcoming")]
         public async Task<IActionResult> GetUpcomingShowtimes()

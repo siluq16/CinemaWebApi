@@ -43,14 +43,11 @@ namespace CinemaWebApi.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            // 1. Kiểm tra trùng Email
             var exists = await _context.Users.AnyAsync(u => u.Email == request.Email);
             if (exists) return BadRequest(new { message = "Email này đã được sử dụng." });
 
-            // 2. Băm mật khẩu (Mã hóa)
             var hashedPassword = _authService.HashPassword(request.Password);
 
-            // 3. Tạo User mới
             var newUser = new User
             {
                 FullName = request.FullName,

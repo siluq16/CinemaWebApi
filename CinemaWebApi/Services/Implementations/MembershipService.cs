@@ -8,10 +8,12 @@ namespace CinemaWebApi.Services.Implementations
     public class MembershipService : IMembershipService
     {
         private readonly IMembershipRepository _membershipRepo;
+        private readonly INotificationService _notiService;
 
-        public MembershipService(IMembershipRepository membershipRepo)
+        public MembershipService(IMembershipRepository membershipRepo, INotificationService notiService)
         {
             _membershipRepo = membershipRepo;
+            _notiService = notiService;
         }
 
         public async Task<MembershipCardResponse> GetMyCardAsync(Guid userId)
@@ -52,7 +54,7 @@ namespace CinemaWebApi.Services.Implementations
                 card = await _membershipRepo.GetByUserIdAsync(userId);
             }
 
-            int earnedPoints = (int)(finalAmount * 0.05m);
+            int earnedPoints = (int)(finalAmount / 10000);
 
             if (earnedPoints > 0)
             {
@@ -64,15 +66,32 @@ namespace CinemaWebApi.Services.Implementations
                     MembershipId = card.Id,
                     BookingId = bookingId,
                     Points = earnedPoints,
-                    Reason = $"Tích lũy 5% từ hóa đơn mua vé",
+                    Reason = $"Tích lũy từ hóa đơn mua vé",
                     CreatedAt = DateTime.Now
                 };
 
                 await _membershipRepo.AddTransactionAsync(transaction);
+                string newTier = card.Tier;
+                if (card.TotalPoints >= 2000 && card.Tier == "silver")
+                {
+                    newTier = "gold";
+                }
+                else if (card.TotalPoints >= 5000 && card.Tier == "gold")
+                {
+                    newTier = "platinum";
+                }
 
-                // (Nâng cao) Logic thăng hạng: Nếu TotalPoints > 2.000.000 thì lên hạng Gold...
-                if (card.TotalPoints >= 2000000 && card.Tier == "silver") card.Tier = "gold";
-                else if (card.TotalPoints >= 5000000 && card.Tier == "gold") card.Tier = "platinum";
+                if (newTier != card.Tier)
+                {
+                    card.Tier = newTier;
+
+                    await _notiService.SendNotificationAsync(
+                        userId,
+                        "🎉 Thăng hạng thành viên!",
+                        $"Chúc mừng! Bạn đã được thăng hạng lên thành viên {newTier.ToUpper()} và sẽ nhận được nhiều ưu đãi mới.",
+                        "tier_upgrade"
+                    );
+                }
 
                 await _membershipRepo.SaveChangesAsync();
             }

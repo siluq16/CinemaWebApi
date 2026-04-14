@@ -1,4 +1,5 @@
-﻿using CinemaWebApi.Models;
+﻿using CinemaWebApi.DTOs.Requests;
+using CinemaWebApi.Models;
 
 namespace CinemaWebApi.Repositories.Interfaces
 {
@@ -6,6 +7,7 @@ namespace CinemaWebApi.Repositories.Interfaces
     {
         Task<IEnumerable<SeatLayout>> GetByRoomIdAsync(int roomId);
         Task<bool> HasSeatsAsync(int roomId); 
+        Task UpdateSeatTypeAsync(IEnumerable<BatchUpdateSeatTypeRequest> seats);
         Task AddRangeAsync(IEnumerable<SeatLayout> seats); 
         Task<bool> SaveChangesAsync();
     }

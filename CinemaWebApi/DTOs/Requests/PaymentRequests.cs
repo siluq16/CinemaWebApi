@@ -12,7 +12,7 @@ namespace CinemaWebApi.DTOs.Requests
         public string Method { get; set; } = null!;
 
         [Required]
-        [Range(1, double.MaxValue, ErrorMessage = "Số tiền thanh toán phải lớn hơn 0")]
+        [Range(0, double.MaxValue, ErrorMessage = "Số tiền thanh toán phải lớn hơn 0")]
         public decimal Amount { get; set; }
 
         // TransactionId giả lập từ phía Frontend hoặc Gateway trả về

@@ -12,6 +12,8 @@ namespace CinemaWebApi.Services.Interfaces
         Task<MovieResponse?> GetMovieByIdAsync(Guid id);
         Task<MovieResponse> CreateMovieAsync(MovieRequest request);
         Task<MovieResponse?> UpdateMovieAsync(Guid id, MovieRequest request);
+        Task<MovieResponse?> UpdateMovieRatingAsync(Guid id);
         Task<bool> DeleteMovieAsync(Guid id);
+        Task AutoUpdateMovieStatusesAsync();
     }
 }

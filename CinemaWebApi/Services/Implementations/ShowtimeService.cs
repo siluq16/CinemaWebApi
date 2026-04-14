@@ -47,9 +47,16 @@ namespace CinemaWebApi.Services.Implementations
                 ScreenFormat = s.ScreenFormat,
                 IsCancelled = s.IsCancelled,
                 Notes = s.Notes,
+                TotalSeats = s.Room?.SeatLayouts.Count(seat => seat.IsActive) ?? 0,
+                SeatsTaken = s.Bookings.Count(t => t.Status == "Paid" || t.Status == "Booked")
             };
         }
 
+        public async Task<IEnumerable<ShowtimeResponse>> GetAllShowtimesAsync()
+        {
+            var showtimes = await _showtimeRepository.GetAllAsync();
+            return showtimes.Select(MapToResponse);
+        }
         public async Task<IEnumerable<ShowtimeResponse>> GetUpcomingShowtimesAsync()
         {
             var views = await _showtimeRepository.GetUpcomingShowtimesAsync();
@@ -69,6 +76,8 @@ namespace CinemaWebApi.Services.Implementations
                 SubtitleType = v.SubtitleType,
                 ScreenFormat = v.ScreenFormat,
                 IsCancelled = false,
+                TotalSeats = v.TotalSeats,
+                SeatsTaken = v.SeatsTaken ?? 0,
                 // Điểm đáng tiền nhất khi dùng View:
                 Notes = $"Còn trống: {v.TotalSeats - v.SeatsTaken}/{v.TotalSeats} ghế",
             });
@@ -144,7 +153,6 @@ namespace CinemaWebApi.Services.Implementations
                 }
                 catch
                 {
-                    // Bắt lỗi nếu có ghế chưa được admin set giá, tạm để 0 hoặc bỏ qua
                     price = 0;
                 }
 
@@ -183,6 +191,8 @@ namespace CinemaWebApi.Services.Implementations
                 SubtitleType = v.SubtitleType,
                 ScreenFormat = v.ScreenFormat,
                 IsCancelled = false,
+                TotalSeats = v.TotalSeats,
+                SeatsTaken = v.SeatsTaken ?? 0,
                 Notes = $"Còn trống: {v.TotalSeats - v.SeatsTaken}/{v.TotalSeats} ghế",
             });
         }

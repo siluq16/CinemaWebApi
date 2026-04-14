@@ -7,5 +7,6 @@ namespace CinemaWebApi.Services.Interfaces
     {
         Task<IEnumerable<SeatLayoutResponse>> GetSeatsByRoomIdAsync(int roomId);
         Task<IEnumerable<SeatLayoutResponse>?> GenerateSeatsAsync(GenerateSeatsRequest request);
+        Task updateSeatTypesAsync(IEnumerable<BatchUpdateSeatTypeRequest> request);
     }
 }

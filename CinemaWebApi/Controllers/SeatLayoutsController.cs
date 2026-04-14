@@ -45,5 +45,20 @@ namespace CinemaWebApi.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+        [HttpPut("update-seat-types")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> UpdateSeatTypes([FromBody] IEnumerable<BatchUpdateSeatTypeRequest> request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                await _seatService.updateSeatTypesAsync(request);
+                return Ok(new { message = "Cập nhật loại ghế thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }

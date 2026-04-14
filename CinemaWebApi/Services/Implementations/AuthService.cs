@@ -33,12 +33,20 @@ namespace CinemaWebApi.Services.Implementations
                 throw new Exception("Email hoặc mật khẩu không chính xác.");
             }
 
+            if (!user.IsActive)
+            {
+                throw new Exception("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.");
+            }
+
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
             if (!isPasswordValid)
             {
                 throw new Exception("Email hoặc mật khẩu không chính xác.");
             }
 
+            user.LastLoginAt = DateTime.Now;
+            _userRepo.UpdateUser(user);
+            await _userRepo.SaveChangesAsync();
             var token = GenerateJwtToken(user);
 
             return new LoginResponse
@@ -46,7 +54,8 @@ namespace CinemaWebApi.Services.Implementations
                 UserId = user.Id,
                 FullName = user.FullName,
                 Role = user.Role,
-                Token = token
+                Token = token,
+                AvatarUrl = user.AvatarUrl
             };
         }
 
@@ -76,7 +85,7 @@ namespace CinemaWebApi.Services.Implementations
             await _userRepo.AddPasswordResetTokenAsync(resetToken);
             await _userRepo.SaveChangesAsync();
 
-            string resetLink = $"http://localhost:3000/reset-password?token={rawToken}";
+            string resetLink = $"http://localhost:5173/reset-password?token={rawToken}";
 
             string emailBody = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;'>
@@ -140,11 +149,15 @@ namespace CinemaWebApi.Services.Implementations
             if (oauthAccount != null)
             {
                 user = await _userRepo.GetByIdAsync(oauthAccount.UserId);
-                if (user == null || !user.IsActive) throw new Exception("Tài khoản đã bị khóa.");
+                if (user == null || !user.IsActive)
+                    throw new Exception("Tài khoản đã bị khóa hoặc không tồn tại.");
             }
             else
             {
                 user = await _userRepo.GetByEmailAsync(payload.Email);
+
+                if (user != null && !user.IsActive)
+                    throw new Exception("Tài khoản liên kết với Email này đã bị khóa.");
 
                 var newOauth = new OauthAccount
                 {
@@ -165,9 +178,9 @@ namespace CinemaWebApi.Services.Implementations
                     {
                         FullName = payload.Name,
                         Email = payload.Email,
-                        AvatarUrl = payload.Picture, // Lấy luôn ảnh đại diện từ Google
+                        AvatarUrl = payload.Picture, 
                         Role = "customer",
-                        IsVerified = true, // Đăng nhập Google thì chắc chắn email xịn
+                        IsVerified = true, 
                         IsActive = true,
                         CreatedAt = DateTime.Now,
                         UpdatedAt = DateTime.Now
@@ -176,8 +189,9 @@ namespace CinemaWebApi.Services.Implementations
                     await _userRepo.CreateUserWithOAuthAsync(user, newOauth);
                 }
             }
-
-            // 4. Trả về chuẩn JWT của hệ thống chúng ta (Khách hàng dùng Web sẽ không thấy sự khác biệt)
+            user.LastLoginAt = DateTime.Now;
+            _userRepo.UpdateUser(user);
+            await _userRepo.SaveChangesAsync();
             var token = GenerateJwtToken(user);
 
             return new LoginResponse

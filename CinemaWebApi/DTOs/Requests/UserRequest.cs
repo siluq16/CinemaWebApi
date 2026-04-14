@@ -47,4 +47,35 @@ namespace CinemaWebApi.DTOs.Requests
         [MinLength(6, ErrorMessage = "Mật khẩu phải từ 6 ký tự trở lên")]
         public string NewPassword { get; set; } = null!;
     }
+
+    public class UpdateProfileRequest
+    {
+        [Required(ErrorMessage = "Họ tên không được để trống")]
+        [StringLength(100)]
+        public string FullName { get; set; } = null!;
+
+        [Phone(ErrorMessage = "Số điện thoại không hợp lệ")]
+        public string? Phone { get; set; }
+
+        public DateOnly? DateOfBirth { get; set; }
+
+        public string? Gender { get; set; } // Nam, Nữ, Khác
+        public string? AvatarUrl { get; set; }
+    }
+
+    public class ChangePasswordRequest
+    {
+        [Required(ErrorMessage = "Vui lòng nhập mật khẩu cũ")]
+        public string OldPassword { get; set; } = null!;
+
+        [Required(ErrorMessage = "Vui lòng nhập mật khẩu mới")]
+        [MinLength(6, ErrorMessage = "Mật khẩu mới phải từ 6 ký tự trở lên")]
+        public string NewPassword { get; set; } = null!;
+
+        [Required(ErrorMessage = "Vui lòng xác nhận mật khẩu mới")]
+        [Compare("NewPassword", ErrorMessage = "Mật khẩu xác nhận không khớp")]
+        public string ConfirmNewPassword { get; set; } = null!;
+    }
+
+    public class UpdateRoleRequest { public string Role { get; set; } = null!; }
 }

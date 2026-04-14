@@ -39,6 +39,48 @@ namespace CinemaWebApi.Services.Implementations
             _notiService = notiService;
         }
 
+        public async Task<List<BookingResponse>> GetAllBookingsAsync()
+        {
+            var bookings = await _bookingRepo.GetAllBooking();
+
+            var response = bookings.Select(b => new BookingResponse
+            {
+                Id = b.Id,
+                BookingCode = b.BookingCode,
+                UserName = b.User?.FullName ?? "Khách vô danh",
+                MovieTitle = b.Showtime?.Movie?.Title ?? "N/A",
+                CinemaName = b.Showtime?.Room?.Cinema?.Name ?? "N/A",
+                RoomName = b.Showtime?.Room?.Name ?? "N/A",
+                StartTime = b.Showtime?.StartTime ?? DateTime.MinValue,
+                Status = b.Status,
+                TicketTotal = b.TotalAmount,
+                FoodTotal = b.FoodAmount,
+                SubTotal = b.TotalAmount + b.FoodAmount,
+                DiscountAmount = b.DiscountAmount,
+                FinalAmount = b.FinalAmount,
+                CreatedAt = b.CreatedAt,
+
+                Seats = b.BookingSeats.Select(s => new BookingSeatResponse
+                {
+                    SeatId = s.SeatId,
+                    RowLabel = s.Seat?.RowLabel ?? "",
+                    SeatNumber = s.Seat?.SeatNumber ?? 0,
+                    Price = s.Price
+                }).ToList(),
+
+                FoodItems = b.FoodOrders.SelectMany(fo => fo.FoodOrderItems).Select(f => new BookingFoodResponse
+                {
+                    FoodItemId = f.FoodItemId,
+                    FoodName = f.FoodItem?.Name ?? "",
+                    Quantity = f.Quantity,
+                    UnitPrice = f.UnitPrice,
+                    SubTotal = f.Subtotal
+                }).ToList()
+            }).OrderByDescending(b => b.CreatedAt).ToList(); 
+
+            return response;
+        }
+
         public async Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request)
         {
             var user = await _userRepo.GetByIdAsync(request.UserId);
@@ -124,16 +166,27 @@ namespace CinemaWebApi.Services.Implementations
             {
                 UserId = request.UserId,
                 ShowtimeId = request.ShowtimeId,
-                TotalAmount = ticketTotal, //+ foodTotal
+                TotalAmount = ticketTotal,
                 Status = "pending",
                 BookingCode = GenerateBookingCode(), 
                 CreatedAt = DateTime.Now,
                 UpdatedAt = DateTime.Now,
-                FinalAmount = ticketTotal, //+ foodTotal
+                FinalAmount = ticketTotal, 
                 ExpiresAt = DateTime.Now.AddMinutes(10) // BỔ SUNG DÒNG NÀY (Hủy đơn sau 10 phút)
             };
 
-            await _bookingRepo.CreateBookingTransactionAsync(booking, bookingSeats);// foodOrder, foodOrderItems);
+            try
+            {
+                await _bookingRepo.CreateBookingTransactionAsync(booking, bookingSeats);
+            }
+            catch (DbUpdateException)
+            {
+                throw new Exception("Xin lỗi, ghế bạn chọn vừa có người khác nhanh tay đặt mất. Vui lòng tải lại sơ đồ ghế!");
+            }
+            catch (Exception)
+            {
+                throw new Exception("Có lỗi xảy ra khi giữ ghế. Vui lòng thử lại.");
+            }
 
             return await GetBookingByIdAsync(booking.Id) ?? throw new Exception("Lỗi khi tạo biên lai.");
         }
@@ -176,6 +229,10 @@ namespace CinemaWebApi.Services.Implementations
                 });
             }
             foodOrder.TotalAmount = foodTotal;
+
+            booking.FoodAmount += foodTotal;
+            booking.FinalAmount += foodTotal;
+            booking.UpdatedAt = DateTime.Now;
 
             await _bookingRepo.AddFoodToBookingAsync(bookingId, foodOrder, foodOrderItems, foodTotal);
 
@@ -315,6 +372,41 @@ namespace CinemaWebApi.Services.Implementations
                 throw;
             }
         }
+
+        public async Task<BookingResponse?> RemovePromotionAsync(Guid bookingId, Guid userId)
+        {
+            using var transaction = await _bookingRepo.BeginTransactionAsync();
+
+            try
+            {
+                var booking = await _bookingRepo.GetBookingWithSeatsAsync(bookingId);
+
+                if (booking == null) throw new Exception("Không tìm thấy đơn hàng.");
+                if (booking.UserId != userId) throw new Exception("Bạn không có quyền thao tác trên đơn hàng này.");
+                if (booking.Status != "pending") throw new Exception("Chỉ gỡ mã được cho đơn hàng chờ thanh toán.");
+                if (booking.DiscountAmount == 0)
+                    return await GetBookingByIdAsync(bookingId);
+
+                await _promotionRepo.RevertPromotionUsageAsync(booking.Id);
+
+                booking.DiscountAmount = 0;
+                booking.FinalAmount = booking.TotalAmount + booking.FoodAmount;
+                booking.UpdatedAt = DateTime.Now;
+
+                _bookingRepo.Update(booking);
+
+                await _bookingRepo.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // 3. Trả về thông tin  hàng sau khi đã gỡ mã để React hiển thị
+                return await GetBookingByIdAsync(booking.Id);
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
         // Hàm sinh mã vé ngẫu nhiên dạng V-ABC1234
         private string GenerateBookingCode()
         {
@@ -328,19 +420,20 @@ namespace CinemaWebApi.Services.Implementations
         public async Task CancelExpiredBookingsAsync()
         {
             var expiredBookings = await _bookingRepo.GetExpiredPendingBookingsAsync();
-            if (!expiredBookings.Any()) return; 
+            if (!expiredBookings.Any()) return;
 
             foreach (var booking in expiredBookings)
             {
                 using var transaction = await _bookingRepo.BeginTransactionAsync();
                 try
                 {
-                    booking.Status = "expired";
+                    booking.Status = "cancelled";
                     booking.UpdatedAt = DateTime.Now;
+                    _bookingRepo.Update(booking);
 
-                    foreach (var seat in booking.BookingSeats)
+                    if (booking.BookingSeats.Any())
                     {
-                        seat.Status = "cancelled";
+                        _bookingRepo.RemoveRange(booking.BookingSeats);
                     }
 
                     foreach (var foodOrder in booking.FoodOrders)
@@ -352,7 +445,6 @@ namespace CinemaWebApi.Services.Implementations
                             item.Status = "cancelled";
                         }
                     }
-                    _bookingRepo.Update(booking);
 
                     await _promotionRepo.RevertPromotionUsageAsync(booking.Id);
                     await _notiService.SendNotificationAsync(
@@ -370,6 +462,10 @@ namespace CinemaWebApi.Services.Implementations
                     await transaction.RollbackAsync();
                 }
             }
+        }
+        public async Task ClearMyPendingBookingsAsync(Guid userId, Guid showtimeId)
+        {
+            await _bookingRepo.ClearUserPendingBookingAsync(userId, showtimeId);
         }
 
     }

@@ -4,6 +4,7 @@ namespace CinemaWebApi.Repositories.Interfaces
 {
     public interface IShowtimeRepository
     {
+        Task<IEnumerable<Showtime>> GetAllAsync();
         Task<IEnumerable<UpcomingShowtime>> GetUpcomingShowtimesAsync();
         Task<Showtime?> GetByIdAsync(Guid id);
         Task<bool> HasOverlapAsync(int roomId, DateTime startTime, DateTime endTime);

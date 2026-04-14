@@ -18,7 +18,7 @@ namespace CinemaWebApi.Controllers
         }
 
         [HttpGet("movie/{movieId:guid}")]
-        [AllowAnonymous] // Ai cũng xem được đánh giá
+        [AllowAnonymous]
         public async Task<IActionResult> GetMovieReviews(Guid movieId)
         {
             var reviews = await _reviewService.GetMovieReviewsAsync(movieId);
@@ -26,7 +26,7 @@ namespace CinemaWebApi.Controllers
         }
 
         [HttpPost]
-        [Authorize] // Phải đăng nhập mới được đánh giá
+        [Authorize]
         public async Task<IActionResult> CreateReview([FromBody] CreateReviewRequest request)
         {
             try
@@ -38,6 +38,41 @@ namespace CinemaWebApi.Controllers
 
                 var result = await _reviewService.CreateReviewAsync(userId, request);
                 return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        [HttpPut("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateReview(Guid id, [FromBody] UpdateReviewRequest request)
+        {
+            try
+            {
+                var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userIdString)) return Unauthorized();
+
+                var result = await _reviewService.UpdateReviewAsync(Guid.Parse(userIdString), id, request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteReview(Guid id)
+        {
+            try
+            {
+                var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userIdString)) return Unauthorized();
+
+                await _reviewService.DeleteReviewAsync(Guid.Parse(userIdString), id);
+                return Ok(new { message = "Đã xóa đánh giá thành công" });
             }
             catch (Exception ex)
             {

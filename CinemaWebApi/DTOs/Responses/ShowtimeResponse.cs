@@ -34,5 +34,8 @@
         public bool IsCancelled { get; set; }
         public string? Notes { get; set; }
 
+        public int TotalSeats { get; set; }
+        public int SeatsTaken { get; set; }
+
     }
 }

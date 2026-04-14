@@ -12,7 +12,6 @@ namespace CinemaWebApi.DTOs.Requests
 
         [Required]
         public DateTime StartTime { get; set; }
-
         public string Language { get; set; } = "vi";
         public string SubtitleType { get; set; } = "vi"; 
         public string ScreenFormat { get; set; } = "2D"; 

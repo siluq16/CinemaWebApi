@@ -10,12 +10,14 @@ namespace CinemaWebApi.Services.Implementations
     public class ReviewService : IReviewService
     {
         private readonly IReviewRepository _reviewRepo;
-        private readonly IBookingRepository _bookingRepo; // Dùng để check xem khách mua vé thật chưa
+        private readonly IBookingRepository _bookingRepo;
+        private readonly IMovieService _movieService;
 
-        public ReviewService(IReviewRepository reviewRepo, IBookingRepository bookingRepo)
+        public ReviewService(IReviewRepository reviewRepo, IBookingRepository bookingRepo, IMovieService movieService)
         {
             _reviewRepo = reviewRepo;
             _bookingRepo = bookingRepo;
+            _movieService = movieService;
         }
 
         public async Task<IEnumerable<ReviewResponse>> GetMovieReviewsAsync(Guid movieId)
@@ -30,7 +32,8 @@ namespace CinemaWebApi.Services.Implementations
                 Rating = r.Rating,
                 Comment = r.Comment,
                 IsVerified = r.IsVerified,
-                CreatedAt = r.CreatedAt
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt
             });
         }
 
@@ -53,7 +56,6 @@ namespace CinemaWebApi.Services.Implementations
                 }
             }
 
-            // 3. Tạo Review
             var review = new Review
             {
                 UserId = userId,
@@ -70,6 +72,7 @@ namespace CinemaWebApi.Services.Implementations
             await _reviewRepo.AddReviewAsync(review);
 
             await _reviewRepo.SaveChangesAsync();
+            await _movieService.UpdateMovieRatingAsync(request.MovieId);
 
             return new ReviewResponse
             {
@@ -81,6 +84,45 @@ namespace CinemaWebApi.Services.Implementations
                 IsVerified = review.IsVerified,
                 CreatedAt = review.CreatedAt
             };
+        }
+        public async Task<ReviewResponse> UpdateReviewAsync(Guid userId, Guid reviewId, UpdateReviewRequest request)
+        {
+            var review = await _reviewRepo.GetReviewByIdAsync(reviewId);
+            if (review == null) throw new Exception("Không tìm thấy đánh giá.");
+            if (review.UserId != userId) throw new Exception("Bạn không có quyền sửa đánh giá này.");
+
+            review.Rating = request.Rating;
+            review.Comment = request.Comment;
+            review.UpdatedAt = DateTime.Now;
+
+            await _reviewRepo.SaveChangesAsync();
+
+            await _movieService.UpdateMovieRatingAsync(review.MovieId);
+
+            return new ReviewResponse
+            {
+                Id = review.Id,
+                UserId = review.UserId,
+                UserName = "Bạn",
+                Rating = review.Rating,
+                Comment = review.Comment,
+                IsVerified = review.IsVerified,
+                CreatedAt = review.CreatedAt,
+                UpdatedAt = review.UpdatedAt
+            };
+        }
+
+        public async Task DeleteReviewAsync(Guid userId, Guid reviewId)
+        {
+            var review = await _reviewRepo.GetReviewByIdAsync(reviewId);
+            if (review == null) throw new Exception("Không tìm thấy đánh giá.");
+            if (review.UserId != userId) throw new Exception("Bạn không có quyền xóa đánh giá này.");
+
+            var movieId = review.MovieId;
+            _reviewRepo.DeleteReview(review);
+            await _reviewRepo.SaveChangesAsync();
+
+            await _movieService.UpdateMovieRatingAsync(movieId);
         }
     }
 }

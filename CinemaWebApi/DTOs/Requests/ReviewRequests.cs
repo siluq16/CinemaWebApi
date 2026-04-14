@@ -15,4 +15,9 @@ namespace CinemaWebApi.DTOs.Requests
 
         public string? Comment { get; set; }
     }
+    public class UpdateReviewRequest
+    {
+        public int Rating { get; set; }
+        public string? Comment { get; set; }
+    }
 }

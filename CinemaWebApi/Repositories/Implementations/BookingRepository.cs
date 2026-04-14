@@ -2,6 +2,7 @@
 using CinemaWebApi.Models;
 using CinemaWebApi.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Numerics;
 
 namespace CinemaWebApi.Repositories.Implementations
 {
@@ -12,6 +13,18 @@ namespace CinemaWebApi.Repositories.Implementations
         public BookingRepository(CinemaWebApiContext context)
         {
             _context = context;
+        }
+
+        public async Task<IEnumerable<Booking>> GetAllBooking()
+        {
+            return await _context.Bookings
+                .Include(b => b.User)
+                .Include(b => b.Showtime).ThenInclude(s => s.Movie)
+                .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
+                .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+                .Include(b => b.FoodOrders).ThenInclude(fo => fo.FoodOrderItems).ThenInclude(foi => foi.FoodItem)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<bool> AreSeatsAvailableAsync(Guid showtimeId, List<int> seatIds)
@@ -73,6 +86,14 @@ namespace CinemaWebApi.Repositories.Implementations
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var booking = await _context.Bookings.FindAsync(bookingId);
+                if (booking != null)
+                {
+                    booking.FoodAmount += foodTotalAmount;
+                    booking.FinalAmount += foodTotalAmount;
+                    booking.UpdatedAt = DateTime.Now;
+                }
+
                 foodOrder.BookingId = bookingId;
                 await _context.FoodOrders.AddAsync(foodOrder);
                 await _context.SaveChangesAsync();
@@ -102,6 +123,7 @@ namespace CinemaWebApi.Repositories.Implementations
                 .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
                 .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
                 .Include(b => b.FoodOrders).ThenInclude(fo => fo.FoodOrderItems).ThenInclude(foi => foi.FoodItem)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(b => b.Id == id);
         }
 
@@ -115,7 +137,7 @@ namespace CinemaWebApi.Repositories.Implementations
         public async Task<Booking?> GetBookingForPaymentAsync(Guid id)
         {
             return await _context.Bookings
-                .Include(b => b.User) // Lấy thông tin khách hàng (để có Email)
+                .Include(b => b.User) 
                 .Include(b => b.Showtime).ThenInclude(s => s.Movie) // Lấy thông tin Phim
                 .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema) // Lấy thông tin Rạp
                 .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat) // Lấy số ghế
@@ -132,11 +154,54 @@ namespace CinemaWebApi.Repositories.Implementations
                 .ToListAsync();
         }
 
-        public void Update(Booking booking)
+        public async Task ClearUserPendingBookingAsync(Guid userId, Guid showtimeId)
         {
-            _context.Bookings.Update(booking);
+            var oldBookings = await _context.Bookings
+                .Include(b => b.BookingSeats)
+                .Include(b => b.FoodOrders).ThenInclude(f => f.FoodOrderItems)
+                .Where(b => b.UserId == userId && b.ShowtimeId == showtimeId && b.Status == "pending")
+                .ToListAsync();
+
+            if (oldBookings.Any())
+            {
+                foreach (var b in oldBookings)
+                {
+                    _context.BookingSeats.RemoveRange(b.BookingSeats);
+                    foreach (var f in b.FoodOrders)
+                    {
+                        _context.FoodOrderItems.RemoveRange(f.FoodOrderItems);
+                    }
+                    _context.FoodOrders.RemoveRange(b.FoodOrders);
+                }
+                _context.Bookings.RemoveRange(oldBookings);
+                await _context.SaveChangesAsync();
+            }
+        }
+        public async Task<List<Booking>> GetConfirmedBookingsByYearAsync(int year)
+        {
+            return await _context.Bookings
+                .AsNoTracking()
+                .Where(b => b.Status == "confirmed" && b.CreatedAt.Year == year)
+                .ToListAsync();
         }
 
+        public async Task<List<Booking>> GetConfirmedBookingsByDateRangeAsync(DateTime startDate, DateTime endDate)
+        {
+            return await _context.Bookings 
+                .AsNoTracking()
+                .Where(b => b.Status == "confirmed" && b.CreatedAt >= startDate && b.CreatedAt <= endDate)
+                .ToListAsync();
+        }
+
+        public void Update(Booking booking)
+        {
+            _context.Update(booking);
+        }
+
+        public void RemoveRange(IEnumerable<BookingSeat> bookingSeats)
+        {
+            _context.BookingSeats.RemoveRange(bookingSeats);
+        }
         public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync()
         {
             return await _context.Database.BeginTransactionAsync();

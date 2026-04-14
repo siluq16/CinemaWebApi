@@ -1,4 +1,6 @@
-﻿using CinemaWebApi.Data;
+﻿using Azure.Core;
+using CinemaWebApi.Data;
+using CinemaWebApi.DTOs.Requests;
 using CinemaWebApi.Models;
 using CinemaWebApi.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +33,23 @@ namespace CinemaWebApi.Repositories.Implementations
         public async Task AddRangeAsync(IEnumerable<SeatLayout> seats)
         {
             await _context.SeatLayouts.AddRangeAsync(seats);
+        }
+
+        public async Task UpdateSeatTypeAsync(IEnumerable<BatchUpdateSeatTypeRequest> seats)
+        {
+            foreach(var item in seats)
+    {
+                var seatsToUpdate = await _context.SeatLayouts
+                    .Where(s => item.SeatIds.Contains(s.Id))
+                    .ToListAsync();
+
+                foreach (var seat in seatsToUpdate)
+                {
+                    seat.SeatType = item.SeatType;
+                }
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<bool> SaveChangesAsync()

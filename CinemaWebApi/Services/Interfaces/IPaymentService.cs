@@ -7,5 +7,6 @@ namespace CinemaWebApi.Services.Interfaces
         Task<bool> ProcessPaymentAsync(ProcessPaymentRequest request, Guid userId);
         Task<string> CreateVnPayPaymentUrlAsync(Guid bookingId, HttpContext context);
         Task<string> ProcessVnPayIpnAsync(IQueryCollection queryData);
+        bool VerifyVnPayReturn(IQueryCollection queryData);
     }
 }
