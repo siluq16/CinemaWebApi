@@ -33,6 +33,7 @@ namespace CinemaWebApi.Repositories.Implementations
         public async Task<IEnumerable<Booking>> GetBookingsByUserIdAsync(Guid userId)
         {
             return await _context.Bookings
+                .AsNoTracking()
                 .Include(b => b.Showtime).ThenInclude(s => s.Movie)
                 .Include(b => b.Showtime).ThenInclude(s => s.Room).ThenInclude(r => r.Cinema)
                 .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
