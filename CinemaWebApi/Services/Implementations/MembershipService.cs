@@ -58,7 +58,14 @@ namespace CinemaWebApi.Services.Implementations
 
             if (earnedPoints > 0)
             {
-                card!.TotalPoints += earnedPoints;
+                double bonusMultiplier = card.Tier switch
+                {
+                    "silver" => 1.0,
+                    "gold" => 1.2,
+                    "platinum" => 1.5,
+                    _ => 1.0
+                };
+                card!.TotalPoints += int.Parse((earnedPoints * bonusMultiplier).ToString("0"));
                 card.UpdatedAt = DateTime.Now;
 
                 var transaction = new PointTransaction

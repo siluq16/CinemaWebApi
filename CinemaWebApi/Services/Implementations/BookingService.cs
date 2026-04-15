@@ -324,7 +324,14 @@ namespace CinemaWebApi.Services.Implementations
 
                 if (promo.DiscountType == "percentage")
                 {
-                    discount = currentTotal * (promo.DiscountValue / 100m);
+                    if(promo.AppliesToFood)
+                    {
+                        discount = (currentTotal) * (promo.DiscountValue / 100);
+                    }
+                    else
+                    {
+                        currentTotal = booking.TotalAmount * (promo.DiscountValue / 100);
+                    }
                     if (promo.MaxDiscountAmount.HasValue && discount > promo.MaxDiscountAmount.Value)
                     {
                         discount = promo.MaxDiscountAmount.Value;
