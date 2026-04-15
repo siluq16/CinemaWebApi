@@ -330,7 +330,7 @@ namespace CinemaWebApi.Services.Implementations
                     }
                     else
                     {
-                        currentTotal = booking.TotalAmount * (promo.DiscountValue / 100);
+                        discount = booking.TotalAmount * (promo.DiscountValue / 100);
                     }
                     if (promo.MaxDiscountAmount.HasValue && discount > promo.MaxDiscountAmount.Value)
                     {
